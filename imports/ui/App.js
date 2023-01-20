@@ -1,48 +1,30 @@
 import { Meteor } from 'meteor/meteor';
 import { Template } from 'meteor/templating';
-import { TasksCollection } from '../db/TasksCollection';
+import { MoviesCollection } from '../db/MoviesCollection';
 import { Tracker } from 'meteor/tracker';
 import { ReactiveDict } from 'meteor/reactive-dict';
 import { FlowRouter } from 'meteor/ostrio:flow-router-extra';
 import './App.html';
 import './Layout.html';
-import './Task.js';
+import './Movie.js';
 import './Login.js';
 import './Signup.js';
 import './404.html';
+import './AddMovie.js';
+import './MovieDetails.js';
 
-const HIDE_COMPLETED_STRING = 'hideCompleted';
 const IS_LOADING_STRING = 'isLoading';
 
 const getUser = () => Meteor.user();
 const isUserLogged = () => !!getUser();
 
-const getTasksFilter = () => {
-  const user = getUser();
-
-  const hideCompletedFilter = { isChecked: { $ne: true } };
-
-  const userFilter = user ? { userId: user._id } : {};
-
-  const pendingOnlyFilter = { ...hideCompletedFilter, ...userFilter };
-
-  return { userFilter, pendingOnlyFilter };
-};
-
 Template.mainContainer.onCreated(function mainContainerOnCreated() {
   this.state = new ReactiveDict();
 
-  const handler = Meteor.subscribe('tasks');
+  const handler = Meteor.subscribe('movies');
   Tracker.autorun(() => {
     this.state.set(IS_LOADING_STRING, !handler.ready());
   });
-});
-
-Template.mainContainer.events({
-  'click #hide-completed-button'(event, instance) {
-    const currentHideCompleted = instance.state.get(HIDE_COMPLETED_STRING);
-    instance.state.set(HIDE_COMPLETED_STRING, !currentHideCompleted);
-  },
 });
 
 Template.layout.events({
@@ -52,36 +34,17 @@ Template.layout.events({
 });
 
 Template.mainContainer.helpers({
-  tasks() {
-    const instance = Template.instance();
-    const hideCompleted = instance.state.get(HIDE_COMPLETED_STRING);
-
-    const { pendingOnlyFilter, userFilter } = getTasksFilter();
-
+  movies() {
     if (!isUserLogged()) {
       return [];
     }
 
-    return TasksCollection.find(
-      hideCompleted ? pendingOnlyFilter : userFilter,
+    return MoviesCollection.find(
+      {},
       {
         sort: { createdAt: -1 },
       }
     ).fetch();
-  },
-  hideCompleted() {
-    return Template.instance().state.get(HIDE_COMPLETED_STRING);
-  },
-  incompleteCount() {
-    if (!isUserLogged()) {
-      return '';
-    }
-
-    const { pendingOnlyFilter } = getTasksFilter();
-
-    const incompleteTasksCount =
-      TasksCollection.find(pendingOnlyFilter).count();
-    return incompleteTasksCount ? `(${incompleteTasksCount})` : '';
   },
   isUserLogged() {
     if (isUserLogged()) {
@@ -99,6 +62,13 @@ Template.mainContainer.helpers({
     const instance = Template.instance();
     return instance.state.get(IS_LOADING_STRING);
   },
+  authorizedAdmin() {
+    const user = Meteor.user();
+    if (user.username != 'admin') {
+      return false;
+    }
+    return true;
+  },
 });
 
 Template.layout.helpers({
@@ -113,22 +83,5 @@ Template.layout.helpers({
       FlowRouter.go('loginRoute');
       return false;
     }
-  },
-});
-
-Template.form.events({
-  'submit .task-form'(event) {
-    // Prevent default browser form submit
-    event.preventDefault();
-
-    // Get value from form element
-    const { target } = event;
-    const text = target.text.value;
-
-    // Insert a task into the collection
-    Meteor.call('tasks.insert', text);
-
-    // Clear form
-    target.text.value = '';
   },
 });
